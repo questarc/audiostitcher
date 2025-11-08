@@ -32,15 +32,17 @@ if audio_files:
                     f.write(file.read())
                 input_paths.append(path)
 
+            output_path = os.path.join(tmpdir, "output.mp3")
             try:
                 # Build input streams
                 inputs = [ffmpeg.input(p) for p in input_paths]
-                joined = ffmpeg.concat(*inputs, v=0, a=1).output('pipe:', format='mp3')
+                joined = ffmpeg.concat(*inputs, v=0, a=1).output(output_path)
+                joined.run(overwrite_output=True)
 
-                out, _ = joined.run(capture_stdout=True, capture_stderr=True)
-                stitched = io.BytesIO(out)
-                st.session_state["stitched_audio"] = stitched
-                st.success("✅ Audio stitched successfully!")
+                with open(output_path, "rb") as f:
+                    stitched = io.BytesIO(f.read())
+                    st.session_state["stitched_audio"] = stitched
+                    st.success("✅ Audio stitched successfully!")
             except ffmpeg.Error as e:
                 st.error("FFmpeg error during stitching.")
                 st.text(e.stderr.decode())
