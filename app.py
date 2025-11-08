@@ -1,7 +1,15 @@
+import sys
+import types
+
+# Patch audioop using audioop-lts for Python 3.13+
+try:
+    import audioop_lts as audioop
+    sys.modules['audioop'] = audioop
+except ImportError:
+    pass
+
 import streamlit as st
-import ffmpeg
-import tempfile
-import os
+from pydub import AudioSegment
 import io
 
 st.set_page_config(page_title="Audio Stitcher", page_icon="🎧", layout="centered")
@@ -24,28 +32,19 @@ if audio_files:
     ordered_files = [file for name in order for file in audio_files if file.name == name]
 
     if st.button("🔗 Stitch Audio"):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            input_paths = []
-            for file in ordered_files:
-                path = os.path.join(tmpdir, file.name)
-                with open(path, "wb") as f:
-                    f.write(file.read())
-                input_paths.append(path)
-
-            output_path = os.path.join(tmpdir, "output.mp3")
+        final_audio = AudioSegment.empty()
+        for file in ordered_files:
             try:
-                # Build input streams
-                inputs = [ffmpeg.input(p) for p in input_paths]
-                joined = ffmpeg.concat(*inputs, v=0, a=1).output(output_path)
-                joined.run(overwrite_output=True)
+                audio = AudioSegment.from_file(file)
+                final_audio += audio
+            except Exception as e:
+                st.error(f"Error processing {file.name}: {e}")
 
-                with open(output_path, "rb") as f:
-                    stitched = io.BytesIO(f.read())
-                    st.session_state["stitched_audio"] = stitched
-                    st.success("✅ Audio stitched successfully!")
-            except ffmpeg.Error as e:
-                st.error("FFmpeg error during stitching.")
-                st.text(e.stderr.decode())
+        buffer = io.BytesIO()
+        final_audio.export(buffer, format="mp3")
+        buffer.seek(0)
+        st.session_state["stitched_audio"] = buffer
+        st.success("✅ Audio stitched successfully!")
 
 if "stitched_audio" in st.session_state:
     st.markdown("### ▶️ Preview")
